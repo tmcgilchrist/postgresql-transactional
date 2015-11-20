@@ -1,0 +1,26 @@
+name:                postgresql-transactional
+version:             0.1.0.0
+synopsis:            a transactional monad on top of postgresql-simple
+license:             MIT
+license-file:        LICENSE
+author:              Reid Draper and Patrick Thomson
+maintainer:          patrick@helium.com
+copyright:           2015 Helium
+category:            Database
+build-type:          Simple
+cabal-version:       >=1.10
+
+source-repository head
+    type: git
+    location: https://github.com/helium/postgresql-transactional.git
+
+library
+  exposed-modules:     Database.PostgreSQL.TransactionalStore
+  hs-source-dirs: src
+  ghc-options: -Wall -Werror
+  -- other-extensions:
+  build-depends:       base >= 4 && < 5
+                     , postgresql-simple >= 0.4
+                     , mtl
+  -- hs-source-dirs:
+  default-language:    Haskell2010
