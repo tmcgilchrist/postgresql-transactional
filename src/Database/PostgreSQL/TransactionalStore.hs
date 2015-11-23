@@ -15,6 +15,9 @@ module Database.PostgreSQL.TransactionalStore
     , queryHead
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
+import           Control.Applicative
+#endif
 import           Control.Monad.Reader
 import           Data.Int
 import qualified Database.PostgreSQL.Simple         as Postgres
