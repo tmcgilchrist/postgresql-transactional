@@ -14,11 +14,14 @@ module Database.PostgreSQL.TransactionalStore
     , executeMany
     , returning
     , queryHead
+    , catchJustPG
     ) where
 
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
 #endif
+import           Control.Exception                  (Exception)
+import qualified Control.Exception                  as Exception
 import           Control.Monad.Reader
 import           Data.Int
 import qualified Database.PostgreSQL.Simple         as Postgres
@@ -86,3 +89,18 @@ executeOne :: (ToRow input) => input -> Postgres.Query -> PGTransaction Bool
 executeOne params q = do
   results <- execute q params
   return (results == 1)
+
+catchJustPG :: Exception e
+            => (e -> Maybe b)
+            -> PGTransaction a
+            -> (b -> PGTransaction a)
+            -> PGTransaction a
+catchJustPG selector (PGTransaction (ReaderT transaction)) handler =
+    PGTransaction (ReaderT caughtTransaction)
+    where caughtTransaction conn =
+            Exception.catchJust
+                selector
+                (transaction conn)
+                (\exc ->
+                    let PGTransaction (ReaderT handlerAction) = handler exc
+                    in handlerAction conn)
