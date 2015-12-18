@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Database.PostgreSQL.TransactionalStore
     ( PGTransaction
@@ -20,8 +19,6 @@ module Database.PostgreSQL.TransactionalStore
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
 #endif
-import           Control.Monad.Base                 (MonadBase)
-import           Control.Monad.Trans.Control        (MonadBaseControl(..))
 import           Control.Monad.Reader
 import           Data.Int
 import qualified Database.PostgreSQL.Simple         as Postgres
@@ -29,19 +26,13 @@ import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
 
 newtype PGTransaction a =
-    PGTransaction { unPGTransaction :: ReaderT Postgres.Connection IO a }
+    PGTransaction (ReaderT Postgres.Connection IO a)
     deriving ( Functor
              , Applicative
              , Monad
              , MonadIO
              , MonadReader Postgres.Connection
-             , MonadBase IO
              )
-
-instance MonadBaseControl IO PGTransaction where
-  type StM PGTransaction a = a
-  liftBaseWith f = PGTransaction $ liftBaseWith $ \q -> f (q . unPGTransaction)
-  restoreM = PGTransaction . restoreM
 
 runPGTransaction :: MonadIO m => PGTransaction a -> Postgres.Connection -> m a
 runPGTransaction (PGTransaction pgTrans) conn =
