@@ -7,6 +7,7 @@ module Database.PostgreSQL.TransactionalStore
     ( PGTransaction
     , TransactionalStore (..)
     , runPGTransaction
+    , runPGTransaction'
     , query
     , query_
     , execute
@@ -22,6 +23,7 @@ import           Control.Applicative
 import           Control.Monad.Reader
 import           Data.Int
 import qualified Database.PostgreSQL.Simple         as Postgres
+import qualified Database.PostgreSQL.Simple.Transaction as Postgres.Transaction
 import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
 
@@ -34,9 +36,15 @@ newtype PGTransaction a =
              , MonadReader Postgres.Connection
              )
 
+runPGTransaction' :: MonadIO m
+                  => Postgres.Transaction.IsolationLevel
+                  -> PGTransaction a
+                  -> Postgres.Connection -> m a
+runPGTransaction' isolation (PGTransaction pgTrans) conn =
+    liftIO (Postgres.Transaction.withTransactionLevel isolation  conn (runReaderT pgTrans conn))
+
 runPGTransaction :: MonadIO m => PGTransaction a -> Postgres.Connection -> m a
-runPGTransaction (PGTransaction pgTrans) conn =
-    liftIO (Postgres.withTransaction conn (runReaderT pgTrans conn))
+runPGTransaction = runPGTransaction' Postgres.Transaction.DefaultIsolationLevel
 
 -- | Used to execute a `HeliumStore' `m' value inside of a transaction, with
 -- connection/state `a', with effects in `n'.
