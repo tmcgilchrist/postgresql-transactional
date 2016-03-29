@@ -5,7 +5,6 @@
 
 module Database.PostgreSQL.TransactionalStore
     ( PGTransaction
-    , TransactionalStore (..)
     , runPGTransaction
     , runPGTransaction'
     , query
@@ -45,14 +44,6 @@ runPGTransaction' isolation (PGTransaction pgTrans) conn =
 
 runPGTransaction :: MonadIO m => PGTransaction a -> Postgres.Connection -> m a
 runPGTransaction = runPGTransaction' Postgres.Transaction.DefaultIsolationLevel
-
--- | Used to execute a `HeliumStore' `m' value inside of a transaction, with
--- connection/state `a', with effects in `n'.
-class TransactionalStore a m n where
-    runTransaction :: m b -> a -> n b
-
-instance MonadIO m => TransactionalStore Postgres.Connection PGTransaction m where
-    runTransaction = runPGTransaction
 
 -- | Issue an SQL query, taking a 'ToRow' input and yielding 'FromRow' outputs.
 query :: (ToRow input, FromRow output)
