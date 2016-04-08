@@ -14,6 +14,7 @@ module Database.PostgreSQL.TransactionalStore
     , executeMany
     , returning
     , queryHead
+    , formatQuery
     ) where
 
 #if __GLASGOW_HASKELL__ < 710
@@ -23,6 +24,7 @@ import           Control.Monad.Reader
 import           Data.Int
 import qualified Database.PostgreSQL.Simple         as Postgres
 import qualified Database.PostgreSQL.Simple.Transaction as Postgres.Transaction
+import qualified Database.PostgreSQL.Simple.Types   as PGTypes
 import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
 
@@ -85,3 +87,8 @@ executeOne :: (ToRow input) => input -> Postgres.Query -> PGTransaction Bool
 executeOne params q = do
   results <- execute q params
   return (results == 1)
+
+formatQuery :: ToRow q => Postgres.Query -> q -> PGTransaction Postgres.Query
+formatQuery q params = do
+    conn <- ask
+    liftIO (PGTypes.Query <$> Postgres.formatQuery conn q params)
