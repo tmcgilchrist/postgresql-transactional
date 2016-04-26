@@ -4,10 +4,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 
-module Database.PostgreSQL.TransactionalStore
+module Database.PostgreSQL.Transaction
     ( PGTransaction
-    , runPGTransaction
-    , runPGTransaction'
+    , runPGTransactionT
+    , runPGTransactionT'
     , runPGTransactionIO
     , query
     , query_
@@ -16,6 +16,7 @@ module Database.PostgreSQL.TransactionalStore
     , executeMany
     , returning
     , queryHead
+    , queryOnly
     , formatQuery
     ) where
 
@@ -26,6 +27,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Trans.Control
 import           Data.Int
 import qualified Database.PostgreSQL.Simple             as Postgres
+import           Database.PostgreSQL.Simple.FromField
 import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
 import qualified Database.PostgreSQL.Simple.Transaction as Postgres.Transaction
@@ -43,20 +45,21 @@ newtype PGTransactionT m a =
 
 type PGTransaction = PGTransactionT IO
 
-runPGTransaction' :: MonadBaseControl IO m
-                  => Postgres.Transaction.IsolationLevel
-                  -> PGTransactionT m a
-                  -> Postgres.Connection -> m a
-runPGTransaction' isolation (PGTransactionT pgTrans) conn =
+runPGTransactionT' :: MonadBaseControl IO m
+                   => Postgres.Transaction.IsolationLevel
+                   -> PGTransactionT m a
+                   -> Postgres.Connection
+                   -> m a
+runPGTransactionT' isolation (PGTransactionT pgTrans) conn =
     let runTransaction run =
           Postgres.Transaction.withTransactionLevel isolation conn (run pgTrans)
     in control runTransaction `runReaderT` conn
 
-runPGTransaction :: MonadBaseControl IO m
-                 => PGTransactionT m a
-                 -> Postgres.Connection
-                 -> m a
-runPGTransaction = runPGTransaction' Postgres.Transaction.DefaultIsolationLevel
+runPGTransactionT :: MonadBaseControl IO m
+                  => PGTransactionT m a
+                  -> Postgres.Connection
+                  -> m a
+runPGTransactionT = runPGTransactionT' Postgres.Transaction.DefaultIsolationLevel
 
 
 -- | Convenience function when there are no embedded monadic effects, only IO.
@@ -64,15 +67,19 @@ runPGTransactionIO :: MonadIO m
                    => PGTransaction a
                    -> Postgres.Connection
                    -> m a
-runPGTransactionIO = (liftIO .) . runPGTransaction
+runPGTransactionIO = (liftIO .) . runPGTransactionT
 
 
 -- | Issue an SQL query, taking a 'ToRow' input and yielding 'FromRow' outputs.
+-- Please note that the parameter order is different from that in the parent
+-- postgresql-simple library; this is an intentional choice to improve the aesthetics
+-- when using the SQL quasiquoter (making the query parameters come first means that
+-- there is more room for the query string).
 query :: (ToRow input, FromRow output, MonadIO m)
-      => Postgres.Query
-      -> input
+      => input
+      -> Postgres.Query
       -> PGTransactionT m [output]
-query q params = ask >>= (\conn -> liftIO $ Postgres.query conn q params)
+query params q = ask >>= (\conn -> liftIO $ Postgres.query conn q params)
 
 -- | As 'query', but for queries that take no arguments.
 query_ :: (FromRow output, MonadIO m)
@@ -82,22 +89,22 @@ query_ q = ask >>= liftIO . (`Postgres.query_` q)
 
 -- | Run a single SQL action and return success.
 execute :: (ToRow input, MonadIO m)
-        => Postgres.Query
-        -> input
+        => input
+        -> Postgres.Query
         -> PGTransactionT m Int64
-execute q params = ask >>= (\conn -> liftIO $ Postgres.execute conn q params)
+execute params q = ask >>= (\conn -> liftIO $ Postgres.execute conn q params)
 
 executeMany :: (ToRow input, MonadIO m)
-            => Postgres.Query
-            -> [input]
+            => [input]
+            -> Postgres.Query
             -> PGTransactionT m Int64
-executeMany q params = ask >>= (\conn -> liftIO $ Postgres.executeMany conn q params)
+executeMany params q = ask >>= (\conn -> liftIO $ Postgres.executeMany conn q params)
 
 returning :: (ToRow input, FromRow output, MonadIO m)
-          => Postgres.Query
-          -> [input]
+          => [input]
+          -> Postgres.Query
           -> PGTransactionT m [output]
-returning q params = ask >>= (\conn -> liftIO $ Postgres.returning conn q params)
+returning params q = ask >>= (\conn -> liftIO $ Postgres.returning conn q params)
 
 -- | Run a query and return 'Just' the first result found or 'Nothing'.
 queryHead :: (ToRow input, FromRow output, MonadIO m)
@@ -105,7 +112,7 @@ queryHead :: (ToRow input, FromRow output, MonadIO m)
           -> Postgres.Query
           -> PGTransactionT m (Maybe output)
 queryHead params q = do
-  results <- query q params
+  results <- query params q
   return $ case results of
     (a:_) -> Just a
     _     -> Nothing
@@ -115,14 +122,19 @@ executeOne :: (ToRow input, MonadIO m)
            => input
            -> Postgres.Query
            -> PGTransactionT m Bool
-executeOne params q = do
-  results <- execute q params
-  return (results == 1)
+executeOne params q = (== 1) <$> execute params q
 
-formatQuery :: (ToRow q, MonadIO m)
-            => Postgres.Query
-            -> q
+-- | Lookup a single FromField value. This takes care of handling 'Only' for you.
+queryOnly :: (ToRow input, FromField f, MonadIO m)
+          => input
+          -> Postgres.Query
+          -> PGTransactionT m (Maybe f)
+queryOnly params q = fmap Postgres.fromOnly <$> queryHead params q
+
+formatQuery :: (ToRow input, MonadIO m)
+            => input
+            -> Postgres.Query
             -> PGTransactionT m Postgres.Query
-formatQuery q params = do
+formatQuery params q = do
     conn <- ask
     liftIO (PGTypes.Query <$> Postgres.formatQuery conn q params)

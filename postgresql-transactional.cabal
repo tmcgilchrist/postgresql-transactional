@@ -1,5 +1,5 @@
 name:                postgresql-transactional
-version:             0.2.0.0
+version:             1.0.0
 synopsis:            a transactional monad on top of postgresql-simple
 license:             MIT
 license-file:        LICENSE
@@ -9,15 +9,21 @@ copyright:           2015 Helium
 category:            Database
 build-type:          Simple
 cabal-version:       >=1.10
+description:
+  This package is a simple monadic wrapper around the SQL primitives
+  provided by the postgresql-simple package. It provides simple and
+  predictable semantics for database options, enforces awareness of
+  Postgres's transactional nature at API boundaries, and obviates
+  the need for SQL boilerplate in transactional queries.
 
 source-repository head
     type: git
     location: https://github.com/helium/postgresql-transactional.git
 
 library
-  exposed-modules:     Database.PostgreSQL.TransactionalStore
+  exposed-modules:     Database.PostgreSQL.Transaction
   hs-source-dirs: src
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   -- other-extensions:
   build-depends:       base >= 4 && < 5
                      , postgresql-simple >= 0.4
