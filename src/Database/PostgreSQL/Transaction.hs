@@ -4,9 +4,26 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 
+{-|
+Module      : Database.PostgreSQL.Transaction
+Copyright   : (c) Helium Systems, Inc.
+License     : MIT
+Maintainer  : patrick@helium.com
+Stability   : experimental
+Portability : GHC
+
+This module provdes querying with and executing SQL statements that replace
+the ones found in @Database.PostgreSQL.Simple@.
+
+Please note that the parameter order is reversed when compared to the functions
+provided by postgresql-simple. This is a conscious choice made so as to ease
+use of a SQL quasiquoter.
+
+-}
+
 module Database.PostgreSQL.Transaction
-    ( PGTransaction
-    , PGTransactionT
+    ( PGTransactionT
+    , PGTransaction
     , runPGTransactionT
     , runPGTransactionT'
     , runPGTransactionIO
@@ -34,6 +51,8 @@ import           Database.PostgreSQL.Simple.ToRow
 import qualified Database.PostgreSQL.Simple.Transaction as Postgres.Transaction
 import qualified Database.PostgreSQL.Simple.Types       as PGTypes
 
+-- | The Postgres transaction monad transformer. This is implemented as a monad transformer
+-- so as to integrate properly with monadic logging libraries like @monad-logger@ or @katip@.
 newtype PGTransactionT m a =
     PGTransactionT (ReaderT Postgres.Connection m a)
     deriving ( Functor
@@ -44,8 +63,11 @@ newtype PGTransactionT m a =
              , MonadIO
              )
 
+-- | A type alias for occurrences of 'PGTransactionT' in the IO monad.
 type PGTransaction = PGTransactionT IO
 
+-- | Runs a transaction in the base monad @m@ with a provided 'IsolationLevel'.
+ -- An instance of MonadBaseControl is required so as to handle lifted calls to 'catch' correctly.
 runPGTransactionT' :: MonadBaseControl IO m
                    => Postgres.Transaction.IsolationLevel
                    -> PGTransactionT m a
@@ -56,6 +78,7 @@ runPGTransactionT' isolation (PGTransactionT pgTrans) conn =
           Postgres.Transaction.withTransactionLevel isolation conn (run pgTrans)
     in control runTransaction `runReaderT` conn
 
+-- | As 'runPGTransactionT'', but with the 'DefaultIsolationLevel' isolation level.
 runPGTransactionT :: MonadBaseControl IO m
                   => PGTransactionT m a
                   -> Postgres.Connection
@@ -95,12 +118,15 @@ execute :: (ToRow input, MonadIO m)
         -> PGTransactionT m Int64
 execute params q = ask >>= (\conn -> liftIO $ Postgres.execute conn q params)
 
+-- | As 'Database.PostgreSQL.Simple.executeMany', but operating in the transaction monad.
+-- If any one of these computations fails, the entire block will be rolled back.
 executeMany :: (ToRow input, MonadIO m)
             => [input]
             -> Postgres.Query
             -> PGTransactionT m Int64
 executeMany params q = ask >>= (\conn -> liftIO $ Postgres.executeMany conn q params)
 
+-- | Identical to 'Database.PostgreSQL.Simple.returning', save parameter order.
 returning :: (ToRow input, FromRow output, MonadIO m)
           => [input]
           -> Postgres.Query
@@ -132,6 +158,7 @@ queryOnly :: (ToRow input, FromField f, MonadIO m)
           -> PGTransactionT m (Maybe f)
 queryOnly params q = fmap Postgres.fromOnly <$> queryHead params q
 
+-- | As 'Database.PostgreSQL.Simple.formatQuery', save parameter order.
 formatQuery :: (ToRow input, MonadIO m)
             => input
             -> Postgres.Query
