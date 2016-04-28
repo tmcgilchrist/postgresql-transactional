@@ -6,6 +6,7 @@
 
 module Database.PostgreSQL.Transaction
     ( PGTransaction
+    , PGTransactionT
     , runPGTransactionT
     , runPGTransactionT'
     , runPGTransactionIO

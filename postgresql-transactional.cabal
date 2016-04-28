@@ -1,5 +1,5 @@
 name:                postgresql-transactional
-version:             1.0.0
+version:             1.1.0
 synopsis:            a transactional monad on top of postgresql-simple
 license:             MIT
 license-file:        LICENSE
