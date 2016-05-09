@@ -64,3 +64,7 @@ released to the public under the terms of the MIT license.
 
 [psqls]: https://github.com/lpsmith/postgresql-simple
 [helium]: https://www.helium.com
+
+## Contributors
+
+Reid Draper wrote the original version. Patrick Thomson and Lane Seppala contributed documentation and infrastructure improvements.
