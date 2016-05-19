@@ -20,7 +20,7 @@ each function is tagged (using DataKinds over the 'Effect' type) with informatio
 as to whether it reads from or writes to the database. This is useful in conjunction
 with Postgres setups that are replicated over multiple machines.
 
-As with 'Database.PostgreSQL.Transaction', the parameter order is reversed when compared to the functions
+As with @Database.PostgreSQL.Transaction@, the parameter order is reversed when compared to the functions
 provided by postgresql-simple.
 
 -}
@@ -56,9 +56,13 @@ import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
 import qualified Database.PostgreSQL.Transaction      as T
 
+-- | Postgres queries are either read-only or writing-enabled.
+-- These values' kinds are used as phantom types in the 'PGTaggedT'
+-- monad transformer.
 data Effect = Read | Write
 
 -- | The tagged-effect Postgres monad transformer.
+-- The @e@ parameter must be either 'Read' or 'Write'.
 newtype PGTaggedT (e :: Effect) m a =
     PGTagged (T.PGTransactionT m a)
     deriving ( Functor
@@ -68,6 +72,7 @@ newtype PGTaggedT (e :: Effect) m a =
              , MonadReader Postgres.Connection
              , MonadIO)
 
+-- | A convenient alias for PGTaggedT values taking place in IO.
 type PGTaggedIO e a = PGTaggedT e IO a
 
 -- | Run a writing-oriented PGTagged transaction.
