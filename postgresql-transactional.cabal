@@ -22,6 +22,7 @@ source-repository head
 
 library
   exposed-modules:     Database.PostgreSQL.Transaction
+                     , Database.PostgreSQL.Tagged
   hs-source-dirs: src
   ghc-options: -Wall
   -- other-extensions:
