@@ -56,6 +56,10 @@ Use of the `MonadBaseControl IO m` constraint leaves open the option of
 embedding additional effects with the `m` parameter, such as logging, state, or
 error-handling.
 
+We also provide a `PGTagged` monad transformer that is equivalent to `PGTransaction`, but includes 
+a phantom type in each relevant type signature that indicates whether said function has read-only 
+or write-enabled effects. This can be useful when dispatching read-only queries to Postgres replicas.
+
 ## About
 
 `postgresql-transactional` was extracted from a production Haskell project at
@@ -67,4 +71,4 @@ released to the public under the terms of the MIT license.
 
 ## Contributors
 
-Reid Draper wrote the original version. Patrick Thomson and Lane Seppala contributed documentation and infrastructure improvements.
+Reid Draper wrote the original version. Patrick Thomson wrote the tagged effects module. Lane Seppala contributed documentation and infrastructure improvements.

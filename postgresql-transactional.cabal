@@ -1,5 +1,5 @@
 name:                postgresql-transactional
-version:             1.1.1
+version:             1.2.0
 synopsis:            a transactional monad on top of postgresql-simple
 license:             MIT
 license-file:        LICENSE
@@ -22,6 +22,7 @@ source-repository head
 
 library
   exposed-modules:     Database.PostgreSQL.Transaction
+                     , Database.PostgreSQL.Tagged
   hs-source-dirs: src
   ghc-options: -Wall
   -- other-extensions:
