@@ -60,6 +60,14 @@ We also provide a `PGTagged` monad transformer that is equivalent to `PGTransact
 a phantom type in each relevant type signature that indicates whether said function has read-only 
 or write-enabled effects. This can be useful when dispatching read-only queries to Postgres replicas.
 
+##  Helium Documentation and Community Support 
+
+
+* **Docs** Complete documenation for all parts of Helium can be found at [docs.helium.com](https://docs/helium.com). 
+
+* **chat.helium.com** - If you have questions or ideas about how to use this code - or any part of Helium - head over the [chat.helium.com](https://chat.helium.com). We're standing by to help. 
+
+
 ## About
 
 `postgresql-transactional` was extracted from a production Haskell project at
@@ -68,7 +76,3 @@ released to the public under the terms of the MIT license.
 
 [psqls]: https://github.com/lpsmith/postgresql-simple
 [helium]: https://www.helium.com
-
-## Contributors
-
-Reid Draper wrote the original version. Patrick Thomson wrote the tagged effects module. Lane Seppala contributed documentation and infrastructure improvements.
