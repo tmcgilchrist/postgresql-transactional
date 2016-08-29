@@ -32,6 +32,7 @@ module Database.PostgreSQL.Transaction
     , query
     , query_
     , execute
+    , execute_
     , executeOne
     , executeMany
     , returning
@@ -128,6 +129,12 @@ execute :: (ToRow input, MonadIO m)
         -> Postgres.Query
         -> PGTransactionT m Int64
 execute params q = getConnection >>= (\conn -> liftIO $ Postgres.execute conn q params)
+
+-- | As 'execute', but for queries that take no arguments.
+execute_ :: MonadIO m
+         => Postgres.Query
+         -> PGTransactionT m Int64
+execute_ q = getConnection >>= (\conn -> liftIO $ Postgres.execute_ conn q)
 
 -- | As 'Database.PostgreSQL.Simple.executeMany', but operating in the transaction monad.
 -- If any one of these computations fails, the entire block will be rolled back.
