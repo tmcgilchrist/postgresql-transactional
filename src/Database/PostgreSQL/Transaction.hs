@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImplicitPrelude            #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE UndecidableInstances       #-}
 
 {-|
 Module      : Database.PostgreSQL.Transaction
@@ -60,9 +61,18 @@ newtype PGTransactionT m a =
              , Applicative
              , Monad
              , MonadTrans
-             , MonadReader Postgres.Connection
              , MonadIO
              )
+             
+instance MonadReader r m => MonadReader r (PGTransactionT m) where
+  ask = lift ask
+  local f (PGTransactionT (ReaderT fm)) 
+    = PGTransactionT 
+    $ ReaderT 
+    $ \c -> local f $ fm c
+             
+getConnection :: Monad m => PGTransactionT m Postgres.Connection
+getConnection = PGTransactionT $ ReaderT $ return . id
 
 -- | A type alias for occurrences of 'PGTransactionT' in the IO monad.
 type PGTransaction = PGTransactionT IO
@@ -104,20 +114,20 @@ query :: (ToRow input, FromRow output, MonadIO m)
       => input
       -> Postgres.Query
       -> PGTransactionT m [output]
-query params q = ask >>= (\conn -> liftIO $ Postgres.query conn q params)
+query params q = getConnection >>= (\conn -> liftIO $ Postgres.query conn q params)
 
 -- | As 'query', but for queries that take no arguments.
 query_ :: (FromRow output, MonadIO m)
        => Postgres.Query
        -> PGTransactionT m [output]
-query_ q = ask >>= liftIO . (`Postgres.query_` q)
+query_ q = getConnection >>= liftIO . (`Postgres.query_` q)
 
 -- | Run a single SQL action and return success.
 execute :: (ToRow input, MonadIO m)
         => input
         -> Postgres.Query
         -> PGTransactionT m Int64
-execute params q = ask >>= (\conn -> liftIO $ Postgres.execute conn q params)
+execute params q = getConnection >>= (\conn -> liftIO $ Postgres.execute conn q params)
 
 -- | As 'Database.PostgreSQL.Simple.executeMany', but operating in the transaction monad.
 -- If any one of these computations fails, the entire block will be rolled back.
@@ -125,14 +135,14 @@ executeMany :: (ToRow input, MonadIO m)
             => [input]
             -> Postgres.Query
             -> PGTransactionT m Int64
-executeMany params q = ask >>= (\conn -> liftIO $ Postgres.executeMany conn q params)
+executeMany params q = getConnection >>= (\conn -> liftIO $ Postgres.executeMany conn q params)
 
 -- | Identical to 'Database.PostgreSQL.Simple.returning', save parameter order.
 returning :: (ToRow input, FromRow output, MonadIO m)
           => [input]
           -> Postgres.Query
           -> PGTransactionT m [output]
-returning params q = ask >>= (\conn -> liftIO $ Postgres.returning conn q params)
+returning params q = getConnection >>= (\conn -> liftIO $ Postgres.returning conn q params)
 
 -- | Run a query and return 'Just' the first result found or 'Nothing'.
 queryHead :: (ToRow input, FromRow output, MonadIO m)
@@ -165,5 +175,5 @@ formatQuery :: (ToRow input, MonadIO m)
             -> Postgres.Query
             -> PGTransactionT m Postgres.Query
 formatQuery params q = do
-    conn <- ask
+    conn <- getConnection
     liftIO (PGTypes.Query <$> Postgres.formatQuery conn q params)

@@ -69,7 +69,6 @@ newtype PGTaggedT (e :: Effect) m a =
              , Applicative
              , Monad
              , MonadTrans
-             , MonadReader Postgres.Connection
              , MonadIO)
 
 -- | A convenient alias for PGTaggedT values taking place in IO.
