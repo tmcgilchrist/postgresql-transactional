@@ -29,6 +29,7 @@ module Database.PostgreSQL.Transaction
     , runPGTransactionT
     , runPGTransactionT'
     , runPGTransactionIO
+    , mapPGTransactionT
     , query
     , query_
     , execute
@@ -64,19 +65,24 @@ newtype PGTransactionT m a =
              , MonadTrans
              , MonadIO
              )
-             
+
 instance MonadReader r m => MonadReader r (PGTransactionT m) where
-  ask = lift ask
-  local f (PGTransactionT (ReaderT fm)) 
-    = PGTransactionT 
-    $ ReaderT 
-    $ \c -> local f $ fm c
-             
+    ask = lift ask
+    local = mapPGTransactionT . local
+
+
 getConnection :: Monad m => PGTransactionT m Postgres.Connection
-getConnection = PGTransactionT $ ReaderT $ return . id
+getConnection = PGTransactionT ask
+
+
+-- | Transform the computation under PGTransactionT
+mapPGTransactionT :: (m a -> n b) -> PGTransactionT m a -> PGTransactionT n b
+mapPGTransactionT f (PGTransactionT m) = PGTransactionT $ mapReaderT f m
+
 
 -- | A type alias for occurrences of 'PGTransactionT' in the IO monad.
 type PGTransaction = PGTransactionT IO
+
 
 -- | Runs a transaction in the base monad @m@ with a provided 'IsolationLevel'.
  -- An instance of MonadBaseControl is required so as to handle lifted calls to 'catch' correctly.
