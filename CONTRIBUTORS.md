@@ -3,3 +3,4 @@
 - Reid Draper
 - Patrick Thomson 
 - Lane Sppala
+- Jonathan Fischoff

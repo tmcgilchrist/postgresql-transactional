@@ -45,6 +45,7 @@ module Database.PostgreSQL.Transaction
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
 #endif
+import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Control
 import           Data.Int
@@ -64,6 +65,7 @@ newtype PGTransactionT m a =
              , Monad
              , MonadTrans
              , MonadIO
+             , MonadThrow
              )
 
 instance MonadReader r m => MonadReader r (PGTransactionT m) where
