@@ -54,13 +54,13 @@ import qualified Database.PostgreSQL.Simple             as Postgres
 import           Database.PostgreSQL.Simple.FromField
 import           Database.PostgreSQL.Simple.FromRow
 import           Database.PostgreSQL.Simple.ToRow
-import qualified Database.PostgreSQL.Simple.Transaction as Postgres.Transaction
+import qualified Database.PostgreSQL.Simple.Transaction as PT
 import qualified Database.PostgreSQL.Simple.Types       as PGTypes
 
 -- | The Postgres transaction monad transformer. This is implemented as a monad transformer
 -- so as to integrate properly with monadic logging libraries like @monad-logger@ or @katip@.
 newtype PGTransactionT m a =
-    PGTransactionT (ReaderT Postgres.Connection m a)
+    PGTransactionT { unPGTransactionT :: ReaderT Postgres.Connection m a }
     deriving ( Functor
              , Applicative
              , Monad
@@ -69,6 +69,7 @@ newtype PGTransactionT m a =
              , MonadThrow
              )
 
+
 instance MonadReader r m => MonadReader r (PGTransactionT m) where
     ask = lift ask
     local = mapPGTransactionT . local
@@ -76,6 +77,47 @@ instance MonadReader r m => MonadReader r (PGTransactionT m) where
 instance MonadState s m => MonadState s (PGTransactionT m) where
     get = lift get
     put = lift . put
+
+-- | 'Control.Monad.Catch.catch' is transaction safe and implemented using
+--   savepoints:
+--   <https://www.postgresql.org/docs/current/static/sql-savepoint.html>.
+--   Savepoints might have a noticable performance impact. The savepoints
+--   are released when the transaction finishes or when the catch action and
+--   handler finish execution, whichever is first. Savepoints are only used
+--   if 'Control.Monad.Catch.catch' or a 'Control.Monad.Catch.catch' derived
+--   function such as 'handle' is invoked.
+instance (MonadIO m, MonadThrow m, MonadMask m, MonadCatch m)
+    => MonadCatch (PGTransactionT m) where
+  -- First we mask exceptions until our exception handler is in place
+    catch (PGTransactionT act) handler = PGTransactionT $ mask $ \restore -> do
+        conn <- ask
+        sp <- liftIO $ PT.newSavepoint conn
+            -- We restore exceptions after we install a handler that will
+            -- rollback to the savepoint we just made
+        let setup = catch (restore act)
+                  $ \e -> case fromException e of
+                              Nothing -> throwM e
+                              Just x  -> do
+                                  liftIO $ PT.rollbackToSavepoint conn
+                                                                sp
+                                  unPGTransactionT $ handler x
+
+            -- Uncondititionally remove the savepoint. Savepoints are
+            -- removed when the transaction completes, but we want to
+            -- remove them when they are no longer needed to save
+            -- resources.
+            cleanup = liftIO $ PT.releaseSavepoint conn sp `catch` \err ->
+                            if PT.isNoActiveTransactionError err
+                                then -- The transaction was aborted, so
+                                     -- the savepoint was deleted. This
+                                     -- is not important, so we catch
+                                     -- this exception and bury it deep down
+                                     -- in the deepest parts of ourselves we
+                                     -- show no one ... no one!
+                                     return ()
+                                else throwM err
+
+        setup `finally` cleanup
 
 getConnection :: Monad m => PGTransactionT m Postgres.Connection
 getConnection = PGTransactionT ask
@@ -91,15 +133,15 @@ type PGTransaction = PGTransactionT IO
 
 
 -- | Runs a transaction in the base monad @m@ with a provided 'IsolationLevel'.
- -- An instance of MonadBaseControl is required so as to handle lifted calls to 'catch' correctly.
+--   Catching exceptions through 'MonadBaseControl' is not transaction safe.
 runPGTransactionT' :: MonadBaseControl IO m
-                   => Postgres.Transaction.IsolationLevel
+                   => PT.IsolationLevel
                    -> PGTransactionT m a
                    -> Postgres.Connection
                    -> m a
 runPGTransactionT' isolation (PGTransactionT pgTrans) conn =
     let runTransaction run =
-          Postgres.Transaction.withTransactionLevel isolation conn (run pgTrans)
+          PT.withTransactionLevel isolation conn (run pgTrans)
     in control runTransaction `runReaderT` conn
 
 -- | As 'runPGTransactionT'', but with the 'DefaultIsolationLevel' isolation level.
@@ -107,7 +149,7 @@ runPGTransactionT :: MonadBaseControl IO m
                   => PGTransactionT m a
                   -> Postgres.Connection
                   -> m a
-runPGTransactionT = runPGTransactionT' Postgres.Transaction.DefaultIsolationLevel
+runPGTransactionT = runPGTransactionT' PT.DefaultIsolationLevel
 
 
 -- | Convenience function when there are no embedded monadic effects, only IO.
