@@ -47,6 +47,7 @@ import           Control.Applicative
 #endif
 import           Control.Monad.Catch
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Control
 import           Data.Int
 import qualified Database.PostgreSQL.Simple             as Postgres
@@ -72,6 +73,9 @@ instance MonadReader r m => MonadReader r (PGTransactionT m) where
     ask = lift ask
     local = mapPGTransactionT . local
 
+instance MonadState s m => MonadState s (PGTransactionT m) where
+    get = lift get
+    put = lift . put
 
 getConnection :: Monad m => PGTransactionT m Postgres.Connection
 getConnection = PGTransactionT ask
