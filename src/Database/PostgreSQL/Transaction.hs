@@ -45,7 +45,9 @@ module Database.PostgreSQL.Transaction
 #if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
 #endif
+import qualified Control.Exception.Lifted               as Lifted
 import           Control.Monad.Catch
+import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Trans.Control
@@ -118,6 +120,36 @@ instance (MonadIO m, MonadThrow m, MonadMask m, MonadCatch m)
                                 else throwM err
 
         setup `finally` cleanup
+
+instance (MonadError e m, MonadBaseControl IO m, MonadIO m) => MonadError e (PGTransactionT m) where
+    throwError = PGTransactionT . throwError
+    catchError (PGTransactionT act) handler = PGTransactionT $ Lifted.mask $ \restore -> do
+        conn <- ask
+        sp <- liftIO $ PT.newSavepoint conn
+            -- We restore exceptions after we install a handler that will
+            -- rollback to the savepoint we just made
+        let setup = catchError (restore act)
+                  $ \e -> do
+                      liftIO $ PT.rollbackToSavepoint conn sp
+                      unPGTransactionT $ handler e
+
+            -- Uncondititionally remove the savepoint. Savepoints are
+            -- removed when the transaction completes, but we want to
+            -- remove them when they are no longer needed to save
+            -- resources.
+            cleanup = liftIO $ PT.releaseSavepoint conn sp `Lifted.catch` \err ->
+                            if PT.isNoActiveTransactionError err
+                                then -- The transaction was aborted, so
+                                     -- the savepoint was deleted. This
+                                     -- is not important, so we catch
+                                     -- this exception and bury it deep down
+                                     -- in the deepest parts of ourselves we
+                                     -- show no one ... no one!
+                                     return ()
+                                else Lifted.throw err
+
+        setup `Lifted.finally` cleanup
+
 
 getConnection :: Monad m => PGTransactionT m Postgres.Connection
 getConnection = PGTransactionT ask
