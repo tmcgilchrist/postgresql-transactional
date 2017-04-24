@@ -107,7 +107,8 @@ instance (MonadIO m, MonadThrow m, MonadMask m, MonadCatch m)
             -- remove them when they are no longer needed to save
             -- resources.
             cleanup = liftIO $ PT.releaseSavepoint conn sp `catch` \err ->
-                            if PT.isNoActiveTransactionError err
+                            if PT.isNoActiveTransactionError err 
+                            || PT.isFailedTransactionError err 
                                 then -- The transaction was aborted, so
                                      -- the savepoint was deleted. This
                                      -- is not important, so we catch
